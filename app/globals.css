@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: 15 76 129;
+  --color-secondary: 27 154 170;
+  --color-accent: 244 162 89;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: "Avenir Next", "Trebuchet MS", "Segoe UI", sans-serif;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+}
+
+a {
+  @apply text-inherit no-underline;
+}
+
+.grid-card {
+  @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-panel dark:border-slate-700 dark:bg-slate-900;
+}

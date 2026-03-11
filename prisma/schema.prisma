@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  STARTED
+  IN_PROGRESS
+  STUCK
+  WAITING_FOR_HELP
+  COMPLETED
+}
+
+enum AlertType {
+  WAITING_TOO_LONG
+  REPEATED_STUCK
+  LOW_CONFIDENCE_AI
+  BOTTLENECK_STEP
+  DIRECT_HELP_REQUEST
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActivityType {
+  VIEWED_LAB
+  UPDATED_PROGRESS
+  SUBMITTED_HELP_REQUEST
+  RECEIVED_AI_GUIDANCE
+  RESOLVED_HELP_REQUEST
+}
+
+model User {
+  id                   String               @id @default(cuid())
+  name                 String
+  username             String               @unique
+  email                String?              @unique
+  role                 UserRole             @default(STUDENT)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  taughtClasses        Class[]              @relation("ClassTeacher")
+  enrollments          Enrollment[]
+  progressRecords      StudentLabProgress[]
+  helpRequests         HelpRequest[]
+  teacherAlerts        TeacherAlert[]       @relation("TeacherAlertRecipient")
+  activityLogs         ActivityLog[]
+}
+
+model Class {
+  id          String       @id @default(cuid())
+  name        String
+  courseCode  String
+  section     String
+  teacherId   String
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  teacher     User         @relation("ClassTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  enrollments Enrollment[]
+  labs        Lab[]
+  alerts      TeacherAlert[]
+  activity    ActivityLog[]
+
+  @@unique([courseCode, section, teacherId])
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  classId   String
+  studentId String
+  createdAt DateTime @default(now())
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student   User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, studentId])
+}
+
+model Lab {
+  id                  String                     @id @default(cuid())
+  classId             String
+  title               String
+  objective           String
+  materials           String
+  startHereContent    String
+  openingRecap        String
+  priorKnowledge      String
+  commonMistakes      String
+  whatFirst           String
+  completionCriteria  String
+  isActive            Boolean                    @default(true)
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  class               Class                      @relation(fields: [classId], references: [id], onDelete: Cascade)
+  steps               LabStep[]
+  checkpoints         TroubleshootingCheckpoint[]
+  progressRecords     StudentLabProgress[]
+  helpRequests        HelpRequest[]
+  alerts              TeacherAlert[]
+  activity            ActivityLog[]
+}
+
+model LabStep {
+  id                    String                     @id @default(cuid())
+  labId                 String
+  order                 Int
+  title                 String
+  description           String
+  expectedResult        String
+  commonProblems        String
+  hints                 String
+  troubleshootingPrompt String
+  escalationGuidance    String
+  lab                   Lab                        @relation(fields: [labId], references: [id], onDelete: Cascade)
+  checkpoints           TroubleshootingCheckpoint[]
+  progressRecords       StudentLabProgress[]
+  helpRequests          HelpRequest[]
+  alerts                TeacherAlert[]
+  activity              ActivityLog[]
+
+  @@unique([labId, order])
+}
+
+model TroubleshootingCheckpoint {
+  id                  String   @id @default(cuid())
+  labId               String
+  labStepId           String?
+  title               String
+  checkpointQuestion  String
+  expectedObservation String
+  actionIfPass        String
+  actionIfFail        String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  lab                 Lab      @relation(fields: [labId], references: [id], onDelete: Cascade)
+  step                LabStep? @relation(fields: [labStepId], references: [id], onDelete: SetNull)
+}
+
+model StudentLabProgress {
+  id              String         @id @default(cuid())
+  studentId       String
+  labId           String
+  currentStepId   String?
+  status          ProgressStatus @default(NOT_STARTED)
+  isStuck         Boolean        @default(false)
+  waitingForHelp  Boolean        @default(false)
+  troubleshootingAttempts Int    @default(0)
+  aiConfidence    Float?
+  notes           String?
+  createdAt       DateTime       @default(now())
+  lastUpdated     DateTime       @updatedAt
+  student         User           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lab             Lab            @relation(fields: [labId], references: [id], onDelete: Cascade)
+  currentStep     LabStep?       @relation(fields: [currentStepId], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, labId])
+}
+
+model HelpRequest {
+  id                       String   @id @default(cuid())
+  studentId                String
+  labId                    String
+  labStepId                String?
+  issueSummary             String
+  troubleshootingAttempted String
+  aiRecommendation         String
+  aiFollowUpQuestions      String
+  aiConfidence             Float
+  resolved                 Boolean  @default(false)
+  teacherNotified          Boolean  @default(false)
+  escalationReason         String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  student                  User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lab                      Lab      @relation(fields: [labId], references: [id], onDelete: Cascade)
+  labStep                  LabStep? @relation(fields: [labStepId], references: [id], onDelete: SetNull)
+}
+
+model TeacherAlert {
+  id          String        @id @default(cuid())
+  teacherId   String
+  classId     String?
+  labId       String?
+  labStepId   String?
+  type        AlertType
+  severity    AlertSeverity @default(MEDIUM)
+  title       String
+  message     String
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  teacher     User          @relation("TeacherAlertRecipient", fields: [teacherId], references: [id], onDelete: Cascade)
+  class       Class?        @relation(fields: [classId], references: [id], onDelete: SetNull)
+  lab         Lab?          @relation(fields: [labId], references: [id], onDelete: SetNull)
+  labStep     LabStep?      @relation(fields: [labStepId], references: [id], onDelete: SetNull)
+}
+
+model ThemeSettings {
+  id             Int      @id @default(1)
+  schoolName     String   @default("Engineering Innovation High")
+  logoUrl        String?  @default("/logo.svg")
+  primaryColor   String   @default("#0F4C81")
+  secondaryColor String   @default("#1B9AAA")
+  accentColor    String   @default("#F4A259")
+  darkMode       Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
+}
+
+model SchoolSettings {
+  id                          Int      @id @default(1)
+  aiEnabled                   Boolean  @default(true)
+  fallbackModeEnabled         Boolean  @default(true)
+  teacherAlertsEnabled        Boolean  @default(true)
+  repeatedStuckThreshold      Int      @default(2)
+  waitingMinutesThreshold     Int      @default(8)
+  lowConfidenceThreshold      Float    @default(0.55)
+  classWideBottleneckThreshold Int     @default(3)
+  localCustomizationNotes     String?
+  updatedAt                   DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        String       @id @default(cuid())
+  userId    String
+  classId   String?
+  labId     String?
+  labStepId String?
+  type      ActivityType
+  details   String
+  createdAt DateTime     @default(now())
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  class     Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
+  lab       Lab?         @relation(fields: [labId], references: [id], onDelete: SetNull)
+  step      LabStep?     @relation(fields: [labStepId], references: [id], onDelete: SetNull)
+}
