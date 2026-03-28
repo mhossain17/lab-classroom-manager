@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { FlaskConical, Lightbulb, Wrench } from "lucide-react";
 import { LoginForm } from "@/components/layout/login-form";
 import { Card } from "@/components/ui/card";
@@ -37,8 +38,21 @@ export default async function LoginPage() {
           </div>
         </Card>
 
-        <div className="flex items-center">
-          <LoginForm users={users} />
+        <div className="space-y-3">
+          <div className="flex items-center">
+            <LoginForm users={users} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/presentation" className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-semibold text-white">
+              Open Presentation Mode
+            </Link>
+            <Link
+              href="/demo"
+              className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+            >
+              Open Demo Center
+            </Link>
+          </div>
         </div>
       </div>
     </div>

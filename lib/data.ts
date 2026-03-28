@@ -1,5 +1,78 @@
-import { ProgressStatus, UserRole } from "@prisma/client";
+import { ActivityType, AlertSeverity, AlertType, ProgressStatus, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+
+type PresentationUser = {
+  id: string;
+  name: string;
+  username: string;
+  role: UserRole;
+};
+
+type PresentationHelpRow = {
+  id: string;
+  createdAt: Date;
+  issueSummary: string;
+  studentName: string;
+  labTitle: string;
+  className: string;
+  section: string;
+  stepLabel: string;
+};
+
+type PresentationAlertRow = {
+  id: string;
+  createdAt: Date;
+  severity: AlertSeverity;
+  type: AlertType;
+  title: string;
+  message: string;
+};
+
+type PresentationActivityRow = {
+  id: string;
+  createdAt: Date;
+  type: ActivityType;
+  details: string;
+  userName: string;
+};
+
+export type PresentationSnapshot = {
+  users: {
+    all: PresentationUser[];
+    students: PresentationUser[];
+    teachers: PresentationUser[];
+    admins: PresentationUser[];
+  };
+  totals: {
+    users: number;
+    classes: number;
+    labs: number;
+    openHelp: number;
+    activeAlerts: number;
+  };
+  progressDistribution: Array<{
+    status: ProgressStatus;
+    count: number;
+  }>;
+  needsTeacherNow: PresentationHelpRow[];
+  activeAlerts: PresentationAlertRow[];
+  recentActivity: PresentationActivityRow[];
+  launchTargets: {
+    studentUserId: string | null;
+    teacherUserId: string | null;
+    adminUserId: string | null;
+    studentLabId: string | null;
+    teacherLabId: string | null;
+  };
+};
+
+function pickPreferredUser(users: PresentationUser[], preferredUsernames: string[]) {
+  if (users.length === 0) {
+    return null;
+  }
+
+  return users.find((user) => preferredUsernames.includes(user.username)) ?? users[0];
+}
 
 export async function getOrCreateGlobalConfig() {
   const [theme, settings] = await Promise.all([
@@ -43,6 +116,218 @@ export async function getLoginUsers() {
       role: true
     }
   });
+}
+
+export async function getPresentationSnapshot(): Promise<PresentationSnapshot> {
+  const [
+    users,
+    classCount,
+    labCount,
+    openHelpCount,
+    activeAlertCount,
+    progressCounts,
+    needsTeacherNowRaw,
+    activeAlertsRaw,
+    recentActivityRaw
+  ] = await Promise.all([
+    prisma.user.findMany({
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        role: true
+      }
+    }),
+    prisma.class.count(),
+    prisma.lab.count(),
+    prisma.helpRequest.count({
+      where: { resolved: false }
+    }),
+    prisma.teacherAlert.count({
+      where: { isActive: true }
+    }),
+    prisma.studentLabProgress.groupBy({
+      by: ["status"],
+      _count: {
+        status: true
+      }
+    }),
+    prisma.helpRequest.findMany({
+      where: {
+        resolved: false
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 8,
+      select: {
+        id: true,
+        createdAt: true,
+        issueSummary: true,
+        student: {
+          select: {
+            name: true
+          }
+        },
+        lab: {
+          select: {
+            title: true,
+            class: {
+              select: {
+                name: true,
+                section: true
+              }
+            }
+          }
+        },
+        labStep: {
+          select: {
+            order: true,
+            title: true
+          }
+        }
+      }
+    }),
+    prisma.teacherAlert.findMany({
+      where: {
+        isActive: true
+      },
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 8,
+      select: {
+        id: true,
+        createdAt: true,
+        severity: true,
+        type: true,
+        title: true,
+        message: true
+      }
+    }),
+    prisma.activityLog.findMany({
+      orderBy: {
+        createdAt: "desc"
+      },
+      take: 10,
+      select: {
+        id: true,
+        createdAt: true,
+        type: true,
+        details: true,
+        user: {
+          select: {
+            name: true
+          }
+        }
+      }
+    })
+  ]);
+
+  const students = users.filter((user) => user.role === UserRole.STUDENT);
+  const teachers = users.filter((user) => user.role === UserRole.TEACHER);
+  const admins = users.filter((user) => user.role === UserRole.ADMIN);
+
+  const preferredStudent = pickPreferredUser(students, ["avery", "jordan", "nina"]);
+  const preferredTeacher = pickPreferredUser(teachers, ["teacher_rivera"]) ?? pickPreferredUser(admins, ["admin_lab"]);
+  const preferredAdmin = pickPreferredUser(admins, ["admin_lab"]);
+
+  const [studentLab, teacherLab] = await Promise.all([
+    preferredStudent
+      ? prisma.lab.findFirst({
+          where: {
+            isActive: true,
+            class: {
+              enrollments: {
+                some: {
+                  studentId: preferredStudent.id
+                }
+              }
+            }
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          select: {
+            id: true
+          }
+        })
+      : Promise.resolve(null),
+    preferredTeacher
+      ? prisma.lab.findFirst({
+          where:
+            preferredTeacher.role === UserRole.ADMIN
+              ? {}
+              : {
+                  class: {
+                    teacherId: preferredTeacher.id
+                  }
+                },
+          orderBy: {
+            updatedAt: "desc"
+          },
+          select: {
+            id: true
+          }
+        })
+      : Promise.resolve(null)
+  ]);
+
+  const countByStatus = new Map(progressCounts.map((row) => [row.status, row._count.status]));
+  const orderedStatuses: ProgressStatus[] = [
+    ProgressStatus.NOT_STARTED,
+    ProgressStatus.STARTED,
+    ProgressStatus.IN_PROGRESS,
+    ProgressStatus.STUCK,
+    ProgressStatus.WAITING_FOR_HELP,
+    ProgressStatus.COMPLETED
+  ];
+
+  return {
+    users: {
+      all: users,
+      students,
+      teachers,
+      admins
+    },
+    totals: {
+      users: users.length,
+      classes: classCount,
+      labs: labCount,
+      openHelp: openHelpCount,
+      activeAlerts: activeAlertCount
+    },
+    progressDistribution: orderedStatuses.map((status) => ({
+      status,
+      count: countByStatus.get(status) ?? 0
+    })),
+    needsTeacherNow: needsTeacherNowRaw.map((request) => ({
+      id: request.id,
+      createdAt: request.createdAt,
+      issueSummary: request.issueSummary,
+      studentName: request.student.name,
+      labTitle: request.lab.title,
+      className: request.lab.class.name,
+      section: request.lab.class.section,
+      stepLabel: request.labStep ? `Step ${request.labStep.order}: ${request.labStep.title}` : "Step not specified"
+    })),
+    activeAlerts: activeAlertsRaw,
+    recentActivity: recentActivityRaw.map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt,
+      type: item.type,
+      details: item.details,
+      userName: item.user.name
+    })),
+    launchTargets: {
+      studentUserId: preferredStudent?.id ?? null,
+      teacherUserId: preferredTeacher?.id ?? null,
+      adminUserId: preferredAdmin?.id ?? null,
+      studentLabId: studentLab?.id ?? null,
+      teacherLabId: teacherLab?.id ?? null
+    }
+  };
 }
 
 export async function getStudentDashboardData(studentId: string) {
