@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { CreateClassForm } from "@/components/teacher/create-class-form";
+import { CsvStudentUploadForm } from "@/components/teacher/csv-student-upload-form";
 import { EnrollStudentForm } from "@/components/teacher/enroll-student-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -8,10 +9,19 @@ import { getOrCreateGlobalConfig, getTeacherClasses } from "@/lib/data";
 
 export default async function TeacherClassesPage() {
   const user = await requireRole(["TEACHER", "ADMIN"]);
-  const [{ theme }, classes] = await Promise.all([getOrCreateGlobalConfig(), getTeacherClasses(user.id)]);
+  const [{ theme }, classes] = await Promise.all([
+    getOrCreateGlobalConfig(),
+    getTeacherClasses(user.id, user.role === "ADMIN")
+  ]);
 
   return (
-    <AppShell role="teacher" userName={user.name} schoolName={theme.schoolName} logoUrl={theme.logoUrl}>
+    <AppShell
+      role="teacher"
+      userName={user.name}
+      schoolName={theme.schoolName}
+      logoUrl={theme.logoUrl}
+      isAdmin={user.role === "ADMIN"}
+    >
       <section className="mb-6 grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-3">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Class Management</h2>
@@ -53,12 +63,17 @@ export default async function TeacherClassesPage() {
                     ) : (
                       classroom.enrollments.map((enrollment) => (
                         <div key={enrollment.id} className="rounded-lg border border-slate-200 p-2 text-sm dark:border-slate-700">
-                          {enrollment.student.name} ({enrollment.student.username})
+                          <p className="font-semibold text-slate-800 dark:text-slate-100">{enrollment.student.name}</p>
+                          <p className="text-xs text-slate-600 dark:text-slate-300">
+                            {enrollment.student.studentId ? `ID: ${enrollment.student.studentId} • ` : ""}
+                            {enrollment.student.email ?? enrollment.student.username}
+                          </p>
                         </div>
                       ))
                     )}
                   </div>
                   <EnrollStudentForm classId={classroom.id} />
+                  <CsvStudentUploadForm classId={classroom.id} />
                 </div>
 
                 <div>

@@ -141,9 +141,9 @@ export async function getStudentProgressRows(studentId: string) {
   });
 }
 
-export async function getTeacherClasses(teacherId: string) {
+export async function getTeacherClasses(teacherId: string, includeAll = false) {
   return prisma.class.findMany({
-    where: { teacherId },
+    where: includeAll ? {} : { teacherId },
     include: {
       enrollments: {
         include: {
@@ -160,12 +160,16 @@ export async function getTeacherClasses(teacherId: string) {
   });
 }
 
-export async function getTeacherLabs(teacherId: string) {
+export async function getTeacherLabs(teacherId: string, includeAll = false) {
   return prisma.lab.findMany({
     where: {
-      class: {
-        teacherId
-      }
+      ...(includeAll
+        ? {}
+        : {
+            class: {
+              teacherId
+            }
+          })
     },
     include: {
       class: true,
@@ -187,10 +191,27 @@ export async function getTeacherLabs(teacherId: string) {
   });
 }
 
-export async function getTeacherDashboardData(teacherId: string) {
+export async function getTeacherDashboardData(teacherId: string, includeAll = false) {
+  const classWhere = includeAll ? {} : { teacherId };
+  const labWhere = includeAll ? {} : { class: { teacherId } };
+  const helpWhere = includeAll ? { resolved: false } : { resolved: false, lab: { class: { teacherId } } };
+  const alertsWhere = includeAll ? { isActive: true } : { teacherId, isActive: true };
+  const activityWhere = includeAll
+    ? {}
+    : {
+        OR: [
+          {
+            class: { is: { teacherId } }
+          },
+          {
+            lab: { is: { class: { teacherId } } }
+          }
+        ]
+      };
+
   const [classes, labs, helpRequests, activeAlerts, activity] = await Promise.all([
     prisma.class.findMany({
-      where: { teacherId, isActive: true },
+      where: { ...classWhere, isActive: true },
       include: {
         enrollments: {
           include: {
@@ -201,9 +222,7 @@ export async function getTeacherDashboardData(teacherId: string) {
     }),
     prisma.lab.findMany({
       where: {
-        class: {
-          teacherId
-        },
+        ...labWhere,
         isActive: true
       },
       include: {
@@ -220,14 +239,7 @@ export async function getTeacherDashboardData(teacherId: string) {
       }
     }),
     prisma.helpRequest.findMany({
-      where: {
-        lab: {
-          class: {
-            teacherId
-          }
-        },
-        resolved: false
-      },
+      where: helpWhere,
       include: {
         student: true,
         lab: {
@@ -243,10 +255,7 @@ export async function getTeacherDashboardData(teacherId: string) {
       take: 20
     }),
     prisma.teacherAlert.findMany({
-      where: {
-        teacherId,
-        isActive: true
-      },
+      where: alertsWhere,
       include: {
         class: true,
         lab: true,
@@ -258,16 +267,7 @@ export async function getTeacherDashboardData(teacherId: string) {
       take: 20
     }),
     prisma.activityLog.findMany({
-      where: {
-        OR: [
-          {
-            class: { is: { teacherId } }
-          },
-          {
-            lab: { is: { class: { teacherId } } }
-          }
-        ]
-      },
+      where: activityWhere,
       include: {
         user: true,
         class: true,
@@ -343,14 +343,18 @@ export async function getTeacherDashboardData(teacherId: string) {
   };
 }
 
-export async function getTeacherMonitoringData(teacherId: string) {
+export async function getTeacherMonitoringData(teacherId: string, includeAll = false) {
   return prisma.studentLabProgress.findMany({
     where: {
-      lab: {
-        class: {
-          teacherId
-        }
-      }
+      ...(includeAll
+        ? {}
+        : {
+            lab: {
+              class: {
+                teacherId
+              }
+            }
+          })
     },
     include: {
       student: true,
@@ -365,11 +369,9 @@ export async function getTeacherMonitoringData(teacherId: string) {
   });
 }
 
-export async function getTeacherAlertsData(teacherId: string) {
+export async function getTeacherAlertsData(teacherId: string, includeAll = false) {
   return prisma.teacherAlert.findMany({
-    where: {
-      teacherId
-    },
+    where: includeAll ? {} : { teacherId },
     include: {
       class: true,
       lab: true,
@@ -403,5 +405,37 @@ export async function getTeacherSettingsData(teacherId: string) {
   return {
     theme,
     settings
+  };
+}
+
+export async function getAdminUserManagementData() {
+  const [users, classes] = await Promise.all([
+    prisma.user.findMany({
+      include: {
+        enrollments: {
+          include: {
+            class: true
+          }
+        },
+        taughtClasses: true
+      },
+      orderBy: [{ role: "asc" }, { name: "asc" }]
+    }),
+    prisma.class.findMany({
+      include: {
+        teacher: true
+      },
+      orderBy: [{ name: "asc" }, { section: "asc" }]
+    })
+  ]);
+
+  return {
+    users,
+    classes,
+    totals: {
+      students: users.filter((user) => user.role === "STUDENT").length,
+      teachers: users.filter((user) => user.role === "TEACHER").length,
+      admins: users.filter((user) => user.role === "ADMIN").length
+    }
   };
 }

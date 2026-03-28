@@ -8,6 +8,7 @@ type AppShellProps = {
   userName: string;
   schoolName: string;
   logoUrl?: string | null;
+  isAdmin?: boolean;
   children: ReactNode;
 };
 
@@ -26,7 +27,12 @@ const navByRole = {
   ]
 };
 
-export function AppShell({ role, userName, schoolName, logoUrl, children }: AppShellProps) {
+export function AppShell({ role, userName, schoolName, logoUrl, isAdmin = false, children }: AppShellProps) {
+  const navItems =
+    role === "teacher" && isAdmin
+      ? [...navByRole.teacher, { href: "/teacher/users", label: "Users" }]
+      : navByRole[role];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-brand-primary/10 via-white to-brand-secondary/10 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
       <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/85 backdrop-blur dark:border-slate-700 dark:bg-slate-900/85">
@@ -51,7 +57,7 @@ export function AppShell({ role, userName, schoolName, logoUrl, children }: AppS
           </div>
         </div>
         <div className="mx-auto w-full max-w-7xl px-4 pb-3 md:px-8">
-          <NavMenu items={navByRole[role]} />
+          <NavMenu items={navItems} />
         </div>
       </header>
       <main className="mx-auto w-full max-w-7xl px-4 py-6 md:px-8 md:py-8">{children}</main>

@@ -188,7 +188,7 @@ export default async function DemoPage() {
               <li>Open Start Here and verify recap/objective/materials render.</li>
               <li>Update progress (step + status) and save.</li>
               <li>Open AI Help, submit an issue, and verify guidance response.</li>
-              <li>Check "My Progress" reflects stuck/waiting status changes.</li>
+              <li>Check the My Progress page reflects stuck/waiting status changes.</li>
               <li>Login as teacher and verify the student appears in monitoring.</li>
               <li>Open teacher dashboard and confirm queue + bottleneck + alerts update.</li>
               <li>Resolve a help request and confirm status clears in student view.</li>

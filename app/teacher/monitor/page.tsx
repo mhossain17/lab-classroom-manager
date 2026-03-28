@@ -8,10 +8,19 @@ import { minutesSince } from "@/lib/utils";
 
 export default async function TeacherMonitoringPage() {
   const user = await requireRole(["TEACHER", "ADMIN"]);
-  const [{ theme }, rows] = await Promise.all([getOrCreateGlobalConfig(), getTeacherMonitoringData(user.id)]);
+  const [{ theme }, rows] = await Promise.all([
+    getOrCreateGlobalConfig(),
+    getTeacherMonitoringData(user.id, user.role === "ADMIN")
+  ]);
 
   return (
-    <AppShell role="teacher" userName={user.name} schoolName={theme.schoolName} logoUrl={theme.logoUrl}>
+    <AppShell
+      role="teacher"
+      userName={user.name}
+      schoolName={theme.schoolName}
+      logoUrl={theme.logoUrl}
+      isAdmin={user.role === "ADMIN"}
+    >
       <section className="mb-5">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Student Monitoring</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300">

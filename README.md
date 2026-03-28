@@ -93,6 +93,8 @@ If no API key is present, the app uses rule-based fallback troubleshooting.
   - recent activity
   - alert stream
 - Class management + enrollment by student username
+- CSV student import by class (headers: student ID, first name, last name, e-mail)
+- Admin user management page (`/teacher/users`) for account creation and bulk student import
 - Lab builder (objective, materials, instructions, multi-step editor)
 - Branding/theme settings (school name, logo URL, color palette, presets, preview)
 - Branding/theme settings (school name, logo upload to `public/uploads`, color palette, presets, preview)

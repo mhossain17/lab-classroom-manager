@@ -11,10 +11,19 @@ import { splitLines } from "@/lib/utils";
 
 export default async function TeacherLabsPage() {
   const user = await requireRole(["TEACHER", "ADMIN"]);
-  const [{ theme }, labs] = await Promise.all([getOrCreateGlobalConfig(), getTeacherLabs(user.id)]);
+  const [{ theme }, labs] = await Promise.all([
+    getOrCreateGlobalConfig(),
+    getTeacherLabs(user.id, user.role === "ADMIN")
+  ]);
 
   return (
-    <AppShell role="teacher" userName={user.name} schoolName={theme.schoolName} logoUrl={theme.logoUrl}>
+    <AppShell
+      role="teacher"
+      userName={user.name}
+      schoolName={theme.schoolName}
+      logoUrl={theme.logoUrl}
+      isAdmin={user.role === "ADMIN"}
+    >
       <section className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Lab Management</h2>

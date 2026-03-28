@@ -11,7 +11,13 @@ export default async function TeacherSettingsPage() {
 
   if (!settingsData?.settings || !settingsData.theme) {
     return (
-      <AppShell role="teacher" userName={user.name} schoolName={theme.schoolName} logoUrl={theme.logoUrl}>
+      <AppShell
+        role="teacher"
+        userName={user.name}
+        schoolName={theme.schoolName}
+        logoUrl={theme.logoUrl}
+        isAdmin={user.role === "ADMIN"}
+      >
         <Card>
           <CardTitle>Settings unavailable</CardTitle>
           <CardDescription>Could not load settings for this account.</CardDescription>
@@ -21,7 +27,13 @@ export default async function TeacherSettingsPage() {
   }
 
   return (
-    <AppShell role="teacher" userName={user.name} schoolName={theme.schoolName} logoUrl={theme.logoUrl}>
+    <AppShell
+      role="teacher"
+      userName={user.name}
+      schoolName={theme.schoolName}
+      logoUrl={theme.logoUrl}
+      isAdmin={user.role === "ADMIN"}
+    >
       <section className="mb-5">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Branding & Settings</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300">

@@ -10,10 +10,19 @@ import { getOrCreateGlobalConfig, getTeacherDashboardData } from "@/lib/data";
 
 export default async function TeacherDashboardPage() {
   const user = await requireRole(["TEACHER", "ADMIN"]);
-  const [{ theme }, dashboard] = await Promise.all([getOrCreateGlobalConfig(), getTeacherDashboardData(user.id)]);
+  const [{ theme }, dashboard] = await Promise.all([
+    getOrCreateGlobalConfig(),
+    getTeacherDashboardData(user.id, user.role === "ADMIN")
+  ]);
 
   return (
-    <AppShell role="teacher" userName={user.name} schoolName={theme.schoolName} logoUrl={theme.logoUrl}>
+    <AppShell
+      role="teacher"
+      userName={user.name}
+      schoolName={theme.schoolName}
+      logoUrl={theme.logoUrl}
+      isAdmin={user.role === "ADMIN"}
+    >
       <section className="mb-6">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Teacher Dashboard</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300">

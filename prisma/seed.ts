@@ -119,17 +119,19 @@ async function main() {
 
   const students = await Promise.all(
     [
-      ["Avery Jackson", "avery"],
-      ["Jordan Kim", "jordan"],
-      ["Nina Patel", "nina"],
-      ["Ethan Brooks", "ethan"],
-      ["Mia Chen", "mia"],
-      ["Leo Martinez", "leo"]
-    ].map(([name, username]) =>
+      { name: "Avery Jackson", username: "avery", studentId: "S1001", email: "avery.jackson@example.edu" },
+      { name: "Jordan Kim", username: "jordan", studentId: "S1002", email: "jordan.kim@example.edu" },
+      { name: "Nina Patel", username: "nina", studentId: "S1003", email: "nina.patel@example.edu" },
+      { name: "Ethan Brooks", username: "ethan", studentId: "S1004", email: "ethan.brooks@example.edu" },
+      { name: "Mia Chen", username: "mia", studentId: "S1005", email: "mia.chen@example.edu" },
+      { name: "Leo Martinez", username: "leo", studentId: "S1006", email: "leo.martinez@example.edu" }
+    ].map((student) =>
       prisma.user.create({
         data: {
-          name,
-          username,
+          name: student.name,
+          username: student.username,
+          studentId: student.studentId,
+          email: student.email,
           role: UserRole.STUDENT
         }
       })

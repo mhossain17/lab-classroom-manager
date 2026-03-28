@@ -6,10 +6,19 @@ import { getOrCreateGlobalConfig, getTeacherClasses } from "@/lib/data";
 
 export default async function NewLabPage() {
   const user = await requireRole(["TEACHER", "ADMIN"]);
-  const [{ theme }, classes] = await Promise.all([getOrCreateGlobalConfig(), getTeacherClasses(user.id)]);
+  const [{ theme }, classes] = await Promise.all([
+    getOrCreateGlobalConfig(),
+    getTeacherClasses(user.id, user.role === "ADMIN")
+  ]);
 
   return (
-    <AppShell role="teacher" userName={user.name} schoolName={theme.schoolName} logoUrl={theme.logoUrl}>
+    <AppShell
+      role="teacher"
+      userName={user.name}
+      schoolName={theme.schoolName}
+      logoUrl={theme.logoUrl}
+      isAdmin={user.role === "ADMIN"}
+    >
       <section className="mb-5">
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Lab Builder</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300">

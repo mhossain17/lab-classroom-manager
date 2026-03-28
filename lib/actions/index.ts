@@ -9,6 +9,7 @@ import { clearSession, requireRole, setSessionUser } from "@/lib/auth";
 import { raiseAlertsFromHelpRequest } from "@/lib/alerts";
 import { generateGuidance } from "@/lib/ai/assistant";
 import type { GuidanceOutput } from "@/lib/ai/types";
+import { normalizeCsvHeader, parseCsvRows, safeUsernameBase } from "@/lib/csv";
 import { prisma } from "@/lib/prisma";
 import { presetThemes } from "@/lib/theme";
 
@@ -44,6 +45,36 @@ async function logActivity(payload: {
       details: payload.details
     }
   });
+}
+
+function findHeaderIndex(headers: string[], aliases: string[]) {
+  for (const alias of aliases) {
+    const index = headers.indexOf(alias);
+    if (index !== -1) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+async function getUniqueUsername(baseInput: string) {
+  const base = safeUsernameBase(baseInput);
+  let candidate = base;
+  let suffix = 1;
+
+  while (true) {
+    const existing = await prisma.user.findUnique({
+      where: { username: candidate },
+      select: { id: true }
+    });
+
+    if (!existing) {
+      return candidate;
+    }
+
+    candidate = `${base.slice(0, 20)}${suffix}`;
+    suffix += 1;
+  }
 }
 
 export async function loginAction(_: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
@@ -192,6 +223,7 @@ export async function requestAiHelpAction(
   _prevState: AiHelpState = defaultAiState,
   formData: FormData
 ): Promise<AiHelpState> {
+  void _prevState;
   const student = await requireRole([UserRole.STUDENT]);
 
   const labId = String(formData.get("labId") || "").trim();
@@ -367,18 +399,23 @@ export async function requestAiHelpAction(
 }
 
 export async function resolveHelpRequestAction(formData: FormData) {
-  const teacher = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
+  const actor = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
   const helpRequestId = String(formData.get("helpRequestId") || "").trim();
 
+  const whereClause =
+    actor.role === UserRole.ADMIN
+      ? { id: helpRequestId }
+      : {
+          id: helpRequestId,
+          lab: {
+            class: {
+              teacherId: actor.id
+            }
+          }
+        };
+
   const request = await prisma.helpRequest.findFirst({
-    where: {
-      id: helpRequestId,
-      lab: {
-        class: {
-          teacherId: teacher.id
-        }
-      }
-    },
+    where: whereClause,
     include: {
       lab: true,
       student: true
@@ -423,7 +460,7 @@ export async function resolveHelpRequestAction(formData: FormData) {
         labId: request.labId,
         labStepId: request.labStepId,
         type: ActivityType.RESOLVED_HELP_REQUEST,
-        details: `Teacher ${teacher.name} resolved support request.`
+        details: `Teacher ${actor.name} resolved support request.`
       }
     })
   ]);
@@ -435,14 +472,19 @@ export async function resolveHelpRequestAction(formData: FormData) {
 }
 
 export async function dismissAlertAction(formData: FormData) {
-  const teacher = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
+  const actor = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
   const alertId = String(formData.get("alertId") || "").trim();
 
+  const whereClause =
+    actor.role === UserRole.ADMIN
+      ? { id: alertId }
+      : {
+          id: alertId,
+          teacherId: actor.id
+        };
+
   await prisma.teacherAlert.updateMany({
-    where: {
-      id: alertId,
-      teacherId: teacher.id
-    },
+    where: whereClause,
     data: {
       isActive: false
     }
@@ -485,7 +527,7 @@ export async function enrollStudentAction(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
-  const teacher = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
+  const actor = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
   const classId = String(formData.get("classId") || "").trim();
   const username = String(formData.get("username") || "").trim();
 
@@ -495,13 +537,17 @@ export async function enrollStudentAction(
 
   const classroom = await prisma.class.findFirst({
     where: {
-      id: classId,
-      teacherId: teacher.id
+      id: classId
     }
   });
 
   if (!classroom) {
-    return { ok: false, message: "Class not found for your account." };
+    return { ok: false, message: "Class not found." };
+  }
+
+  const canManageClass = actor.role === UserRole.ADMIN || classroom.teacherId === actor.id;
+  if (!canManageClass) {
+    return { ok: false, message: "You can only enroll students in your own classes." };
   }
 
   const student = await prisma.user.findFirst({
@@ -536,6 +582,236 @@ export async function enrollStudentAction(
   return { ok: true, message: `Enrolled ${student.name} in ${classroom.name}.` };
 }
 
+export async function createUserAction(
+  _prevState: ActionResult | undefined,
+  formData: FormData
+): Promise<ActionResult> {
+  await requireRole([UserRole.ADMIN]);
+
+  const firstName = String(formData.get("firstName") || "").trim();
+  const lastName = String(formData.get("lastName") || "").trim();
+  const roleRaw = String(formData.get("role") || "STUDENT").trim();
+  const emailRaw = String(formData.get("email") || "").trim().toLowerCase();
+  const studentIdRaw = String(formData.get("studentId") || "").trim();
+  const usernameRaw = String(formData.get("username") || "").trim();
+
+  const validRoles = [UserRole.STUDENT, UserRole.TEACHER, UserRole.ADMIN];
+  const role = validRoles.includes(roleRaw as UserRole) ? (roleRaw as UserRole) : UserRole.STUDENT;
+  const email = emailRaw.length > 0 ? emailRaw : null;
+  const studentId = studentIdRaw.length > 0 ? studentIdRaw : null;
+
+  if (!firstName || !lastName) {
+    return { ok: false, message: "First and last name are required." };
+  }
+
+  if (role === UserRole.STUDENT && !studentId) {
+    return { ok: false, message: "Student ID is required for student accounts." };
+  }
+
+  if (email) {
+    const existingEmail = await prisma.user.findUnique({ where: { email } });
+    if (existingEmail) {
+      return { ok: false, message: "That email is already used by another account." };
+    }
+  }
+
+  if (studentId) {
+    const existingStudentId = await prisma.user.findUnique({ where: { studentId } });
+    if (existingStudentId) {
+      return { ok: false, message: "That student ID is already used by another account." };
+    }
+  }
+
+  let username = usernameRaw;
+  if (!username) {
+    const fallback = studentId || (email ? email.split("@")[0] : `${firstName}.${lastName}`);
+    username = await getUniqueUsername(fallback);
+  } else {
+    const normalized = safeUsernameBase(username);
+    const existing = await prisma.user.findUnique({ where: { username: normalized } });
+    if (existing) {
+      return { ok: false, message: "That username is already taken." };
+    }
+    username = normalized;
+  }
+
+  await prisma.user.create({
+    data: {
+      name: `${firstName} ${lastName}`.trim(),
+      role,
+      email,
+      studentId,
+      username
+    }
+  });
+
+  revalidatePath("/teacher/users");
+  revalidatePath("/teacher/classes");
+  revalidatePath("/login");
+
+  return { ok: true, message: `Created ${role.toLowerCase()} account for ${firstName} ${lastName}.` };
+}
+
+export async function importStudentsCsvAction(
+  _prevState: ActionResult | undefined,
+  formData: FormData
+): Promise<ActionResult> {
+  const actor = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
+
+  const classId = String(formData.get("classId") || "").trim();
+  const csvFile = formData.get("csvFile");
+
+  if (!classId) {
+    return { ok: false, message: "Choose a class before uploading the CSV file." };
+  }
+
+  if (!(csvFile instanceof File) || csvFile.size === 0) {
+    return { ok: false, message: "Upload a CSV file first." };
+  }
+
+  const classroom = await prisma.class.findUnique({
+    where: { id: classId },
+    select: { id: true, name: true, teacherId: true }
+  });
+
+  if (!classroom) {
+    return { ok: false, message: "Class not found." };
+  }
+
+  const canManageClass = actor.role === UserRole.ADMIN || classroom.teacherId === actor.id;
+  if (!canManageClass) {
+    return { ok: false, message: "You can only import students into your own classes." };
+  }
+
+  const text = await csvFile.text();
+  const rows = parseCsvRows(text);
+
+  if (rows.length < 2) {
+    return { ok: false, message: "CSV must include a header row and at least one student row." };
+  }
+
+  const headers = rows[0].map((header) => normalizeCsvHeader(header));
+  const studentIdIndex = findHeaderIndex(headers, ["studentid", "id", "studentnumber"]);
+  const firstNameIndex = findHeaderIndex(headers, ["firstname", "first"]);
+  const lastNameIndex = findHeaderIndex(headers, ["lastname", "last"]);
+  const emailIndex = findHeaderIndex(headers, ["email", "emailaddress", "eaddress"]);
+
+  if (studentIdIndex === -1 || firstNameIndex === -1 || lastNameIndex === -1) {
+    return {
+      ok: false,
+      message:
+        "CSV header must include: student ID, first name, last name. Optional: e-mail."
+    };
+  }
+
+  let createdUsers = 0;
+  let updatedUsers = 0;
+  let newEnrollments = 0;
+  let skippedRows = 0;
+  const rowErrors: string[] = [];
+
+  for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
+    const row = rows[rowIndex];
+    const studentIdValue = String(row[studentIdIndex] || "").trim();
+    const firstName = String(row[firstNameIndex] || "").trim();
+    const lastName = String(row[lastNameIndex] || "").trim();
+    const emailRaw = emailIndex >= 0 ? String(row[emailIndex] || "").trim().toLowerCase() : "";
+    const email = emailRaw.length > 0 ? emailRaw : null;
+
+    if (!studentIdValue && !firstName && !lastName && !email) {
+      continue;
+    }
+
+    if (!studentIdValue || !firstName || !lastName) {
+      skippedRows += 1;
+      rowErrors.push(`Row ${rowIndex + 1}: missing required fields.`);
+      continue;
+    }
+
+    const matches = await prisma.user.findMany({
+      where: {
+        OR: [{ studentId: studentIdValue }, ...(email ? [{ email }] : [])]
+      },
+      take: 2
+    });
+
+    if (matches.length > 1) {
+      skippedRows += 1;
+      rowErrors.push(`Row ${rowIndex + 1}: multiple users matched student ID/email.`);
+      continue;
+    }
+
+    let user = matches[0] ?? null;
+
+    if (user && user.role !== UserRole.STUDENT) {
+      skippedRows += 1;
+      rowErrors.push(`Row ${rowIndex + 1}: matched non-student account (${user.username}).`);
+      continue;
+    }
+
+    if (!user) {
+      const usernameBase = studentIdValue || email || `${firstName}.${lastName}`;
+      const username = await getUniqueUsername(usernameBase);
+      user = await prisma.user.create({
+        data: {
+          name: `${firstName} ${lastName}`.trim(),
+          studentId: studentIdValue,
+          email,
+          username,
+          role: UserRole.STUDENT
+        }
+      });
+      createdUsers += 1;
+    } else {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          name: `${firstName} ${lastName}`.trim(),
+          studentId: studentIdValue,
+          email: email ?? user.email,
+          role: UserRole.STUDENT
+        }
+      });
+      updatedUsers += 1;
+    }
+
+    const existingEnrollment = await prisma.enrollment.findUnique({
+      where: {
+        classId_studentId: {
+          classId: classroom.id,
+          studentId: user.id
+        }
+      },
+      select: { id: true }
+    });
+
+    if (!existingEnrollment) {
+      await prisma.enrollment.create({
+        data: {
+          classId: classroom.id,
+          studentId: user.id
+        }
+      });
+      newEnrollments += 1;
+    }
+  }
+
+  revalidatePath("/teacher/classes");
+  revalidatePath("/teacher/users");
+  revalidatePath("/teacher");
+  revalidatePath("/login");
+
+  const errorPreview =
+    rowErrors.length > 0
+      ? ` Issues: ${rowErrors.slice(0, 3).join(" ")}${rowErrors.length > 3 ? " ..." : ""}`
+      : "";
+
+  return {
+    ok: true,
+    message: `Import finished for ${classroom.name}. Created ${createdUsers}, updated ${updatedUsers}, enrolled ${newEnrollments}, skipped ${skippedRows}.${errorPreview}`
+  };
+}
+
 function readStepRow(formData: FormData, index: number) {
   const title = String(formData.get(`stepTitle_${index}`) || "").trim();
   const description = String(formData.get(`stepDescription_${index}`) || "").trim();
@@ -567,7 +843,7 @@ export async function createLabAction(
   _prevState: ActionResult | undefined,
   formData: FormData
 ): Promise<ActionResult> {
-  const teacher = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
+  const actor = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
 
   const classId = String(formData.get("classId") || "").trim();
   const title = String(formData.get("title") || "").trim();
@@ -586,13 +862,17 @@ export async function createLabAction(
 
   const ownsClass = await prisma.class.findFirst({
     where: {
-      id: classId,
-      teacherId: teacher.id
+      id: classId
     }
   });
 
   if (!ownsClass) {
-    return { ok: false, message: "You can only add labs to your classes." };
+    return { ok: false, message: "Class not found." };
+  }
+
+  const canManageClass = actor.role === UserRole.ADMIN || ownsClass.teacherId === actor.id;
+  if (!canManageClass) {
+    return { ok: false, message: "You can only add labs to your own classes." };
   }
 
   const steps = Array.from({ length: 8 }, (_, index) => readStepRow(formData, index + 1)).filter(Boolean) as Array<{
@@ -637,19 +917,23 @@ export async function createLabAction(
 }
 
 export async function toggleLabActiveAction(formData: FormData) {
-  const teacher = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
+  const actor = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
   const labId = String(formData.get("labId") || "").trim();
 
   const lab = await prisma.lab.findFirst({
     where: {
-      id: labId,
-      class: {
-        teacherId: teacher.id
-      }
+      id: labId
+    },
+    include: {
+      class: true
     }
   });
 
   if (!lab) {
+    return;
+  }
+
+  if (actor.role !== UserRole.ADMIN && lab.class.teacherId !== actor.id) {
     return;
   }
 

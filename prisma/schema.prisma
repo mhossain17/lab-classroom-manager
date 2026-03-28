@@ -47,6 +47,7 @@ enum ActivityType {
 model User {
   id                   String               @id @default(cuid())
   name                 String
+  studentId            String?              @unique
   username             String               @unique
   email                String?              @unique
   role                 UserRole             @default(STUDENT)

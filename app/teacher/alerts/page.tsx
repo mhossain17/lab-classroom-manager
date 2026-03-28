@@ -7,13 +7,22 @@ import { getOrCreateGlobalConfig, getTeacherAlertsData } from "@/lib/data";
 
 export default async function TeacherAlertsPage() {
   const user = await requireRole(["TEACHER", "ADMIN"]);
-  const [{ theme }, alerts] = await Promise.all([getOrCreateGlobalConfig(), getTeacherAlertsData(user.id)]);
+  const [{ theme }, alerts] = await Promise.all([
+    getOrCreateGlobalConfig(),
+    getTeacherAlertsData(user.id, user.role === "ADMIN")
+  ]);
 
   const active = alerts.filter((alert) => alert.isActive);
   const resolved = alerts.filter((alert) => !alert.isActive);
 
   return (
-    <AppShell role="teacher" userName={user.name} schoolName={theme.schoolName} logoUrl={theme.logoUrl}>
+    <AppShell
+      role="teacher"
+      userName={user.name}
+      schoolName={theme.schoolName}
+      logoUrl={theme.logoUrl}
+      isAdmin={user.role === "ADMIN"}
+    >
       <section className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Intervention Alerts</h2>
