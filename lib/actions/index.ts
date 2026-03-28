@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { clearSession, requireRole, setSessionUser } from "@/lib/auth";
 import { raiseAlertsFromHelpRequest } from "@/lib/alerts";
 import { generateGuidance } from "@/lib/ai/assistant";
+import { generateLabPacketDraft } from "@/lib/ai/lab-packet-builder";
 import type { GuidanceOutput } from "@/lib/ai/types";
 import { normalizeCsvHeader, parseCsvRows, safeUsernameBase } from "@/lib/csv";
 import { prisma } from "@/lib/prisma";
@@ -75,6 +76,54 @@ async function getUniqueUsername(baseInput: string) {
     candidate = `${base.slice(0, 20)}${suffix}`;
     suffix += 1;
   }
+}
+
+function buildSchematicDiagram(componentsText: string, connectionsText: string) {
+  const components = componentsText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [idRaw, labelRaw] = line.split(",").map((cell) => cell.trim());
+      const id = safeUsernameBase(idRaw || "node");
+      const label = labelRaw || idRaw || "Component";
+      return { id, label };
+    });
+
+  if (components.length === 0) {
+    return "";
+  }
+
+  const nodeSet = new Set(components.map((component) => component.id));
+  const lines = ["graph LR"];
+
+  for (const component of components) {
+    lines.push(`  ${component.id}[\"${component.label}\"]`);
+  }
+
+  const connections = connectionsText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const connection of connections) {
+    const [fromRaw, toRaw, labelRaw] = connection.split(",").map((cell) => cell.trim());
+    const from = safeUsernameBase(fromRaw || "");
+    const to = safeUsernameBase(toRaw || "");
+    const label = labelRaw || "";
+
+    if (!nodeSet.has(from) || !nodeSet.has(to)) {
+      continue;
+    }
+
+    if (label) {
+      lines.push(`  ${from} -- \"${label}\" --> ${to}`);
+    } else {
+      lines.push(`  ${from} --> ${to}`);
+    }
+  }
+
+  return lines.join("\n");
 }
 
 export async function loginAction(_: ActionResult | undefined, formData: FormData): Promise<ActionResult> {
@@ -810,6 +859,171 @@ export async function importStudentsCsvAction(
     ok: true,
     message: `Import finished for ${classroom.name}. Created ${createdUsers}, updated ${updatedUsers}, enrolled ${newEnrollments}, skipped ${skippedRows}.${errorPreview}`
   };
+}
+
+export async function generateLabPacketAction(
+  _prevState: ActionResult | undefined,
+  formData: FormData
+): Promise<ActionResult> {
+  const actor = await requireRole([UserRole.TEACHER, UserRole.ADMIN]);
+  const labId = String(formData.get("labId") || "").trim();
+  const narration = String(formData.get("narration") || "").trim();
+  const dueDateRaw = String(formData.get("dueDate") || "").trim();
+
+  if (!labId) {
+    return { ok: false, message: "Choose a lab first." };
+  }
+
+  if (narration.length < 20) {
+    return { ok: false, message: "Add more narration/details so AI can build a useful lab packet." };
+  }
+
+  const lab = await prisma.lab.findUnique({
+    where: { id: labId },
+    include: {
+      class: true
+    }
+  });
+
+  if (!lab) {
+    return { ok: false, message: "Lab not found." };
+  }
+
+  if (actor.role !== UserRole.ADMIN && lab.class.teacherId !== actor.id) {
+    return { ok: false, message: "You can only build packets for your own labs." };
+  }
+
+  const settings = await prisma.schoolSettings.findUnique({ where: { id: 1 } });
+  const draft = await generateLabPacketDraft(
+    {
+      labTitle: lab.title,
+      courseName: lab.class.name,
+      existingObjective: lab.objective,
+      narration,
+      dueDate: dueDateRaw || undefined
+    },
+    {
+      aiEnabled: settings?.aiEnabled ?? true,
+      fallbackModeEnabled: settings?.fallbackModeEnabled ?? true
+    }
+  );
+
+  const dueDate = dueDateRaw ? new Date(`${dueDateRaw}T23:59:00`) : null;
+
+  await prisma.labPacket.upsert({
+    where: { labId: lab.id },
+    create: {
+      labId: lab.id,
+      sourceNarration: narration,
+      dueDate,
+      ...draft
+    },
+    update: {
+      sourceNarration: narration,
+      dueDate,
+      ...draft
+    }
+  });
+
+  revalidatePath("/teacher/labs");
+  revalidatePath(`/teacher/labs/${lab.id}/builder`);
+  revalidatePath(`/student/labs/${lab.id}`);
+  revalidatePath(`/student/labs/${lab.id}/instructions`);
+  revalidatePath(`/student/labs/${lab.id}/report`);
+
+  return { ok: true, message: `Lab packet generated for ${lab.title}.` };
+}
+
+export async function saveStudentLabWorkAction(
+  _prevState: ActionResult | undefined,
+  formData: FormData
+): Promise<ActionResult> {
+  const student = await requireRole([UserRole.STUDENT]);
+  const labId = String(formData.get("labId") || "").trim();
+
+  const lab = await prisma.lab.findFirst({
+    where: {
+      id: labId,
+      class: {
+        enrollments: {
+          some: {
+            studentId: student.id
+          }
+        }
+      }
+    }
+  });
+
+  if (!lab) {
+    return { ok: false, message: "Lab not found for your enrollment." };
+  }
+
+  const preLabResponses = String(formData.get("preLabResponses") || "").trim();
+  const procedureThinkingLog = String(formData.get("procedureThinkingLog") || "").trim();
+  const equipmentDataEntries = String(formData.get("equipmentDataEntries") || "").trim();
+  const schematicComponents = String(formData.get("schematicComponents") || "").trim();
+  const schematicConnections = String(formData.get("schematicConnections") || "").trim();
+  const reportIntroduction = String(formData.get("reportIntroduction") || "").trim();
+  const reportMethodology = String(formData.get("reportMethodology") || "").trim();
+  const reportDatasheetSummary = String(formData.get("reportDatasheetSummary") || "").trim();
+  const reportResults = String(formData.get("reportResults") || "").trim();
+  const reportDiscussion = String(formData.get("reportDiscussion") || "").trim();
+  const reportApplications = String(formData.get("reportApplications") || "").trim();
+  const reportConclusion = String(formData.get("reportConclusion") || "").trim();
+  const reportQuestions = String(formData.get("reportQuestions") || "").trim();
+  const reportReferences = String(formData.get("reportReferences") || "").trim();
+
+  const schematicDiagram = buildSchematicDiagram(schematicComponents, schematicConnections);
+
+  await prisma.studentLabWork.upsert({
+    where: {
+      studentId_labId: {
+        studentId: student.id,
+        labId: lab.id
+      }
+    },
+    create: {
+      studentId: student.id,
+      labId: lab.id,
+      preLabResponses,
+      procedureThinkingLog,
+      equipmentDataEntries,
+      schematicComponents,
+      schematicConnections,
+      schematicDiagram,
+      reportIntroduction,
+      reportMethodology,
+      reportDatasheetSummary,
+      reportResults,
+      reportDiscussion,
+      reportApplications,
+      reportConclusion,
+      reportQuestions,
+      reportReferences
+    },
+    update: {
+      preLabResponses,
+      procedureThinkingLog,
+      equipmentDataEntries,
+      schematicComponents,
+      schematicConnections,
+      schematicDiagram,
+      reportIntroduction,
+      reportMethodology,
+      reportDatasheetSummary,
+      reportResults,
+      reportDiscussion,
+      reportApplications,
+      reportConclusion,
+      reportQuestions,
+      reportReferences
+    }
+  });
+
+  revalidatePath(`/student/labs/${lab.id}/report`);
+  revalidatePath(`/student/labs/${lab.id}`);
+
+  return { ok: true, message: "Lab report workspace saved." };
 }
 
 function readStepRow(formData: FormData, index: number) {

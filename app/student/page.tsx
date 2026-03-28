@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, LifeBuoy, PlayCircle } from "lucide-react";
+import { BookOpen, FileText, LifeBuoy, PlayCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Badge } from "@/components/ui/badge";
@@ -72,7 +72,7 @@ export default async function StudentDashboardPage() {
                       )}
                     </div>
 
-                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                       <Link href={`/student/labs/${lab.id}`}>
                         <Button type="button" className="w-full" size="sm">
                           <PlayCircle className="mr-1 h-4 w-4" />
@@ -89,6 +89,12 @@ export default async function StudentDashboardPage() {
                         <Button type="button" variant="secondary" className="w-full" size="sm">
                           <LifeBuoy className="mr-1 h-4 w-4" />
                           Get Help
+                        </Button>
+                      </Link>
+                      <Link href={`/student/labs/${lab.id}/report`}>
+                        <Button type="button" variant="ghost" className="w-full" size="sm">
+                          <FileText className="mr-1 h-4 w-4" />
+                          Lab Report
                         </Button>
                       </Link>
                     </div>

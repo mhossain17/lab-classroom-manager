@@ -75,6 +75,34 @@ export default async function LabInstructionsPage({ params }: { params: Promise<
             ))}
           </ul>
         </Card>
+
+        {lab.packet ? (
+          <Card className="lg:col-span-2">
+            <CardTitle>Teacher-Published Lab Packet</CardTitle>
+            <div className="mt-3 grid gap-4 lg:grid-cols-2">
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Background information</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{lab.packet.backgroundInformation}</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Practical significance</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{lab.packet.practicalSignificance}</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Pre-lab preparation</p>
+                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{lab.packet.preLabPreparation}</p>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Pre-lab questions</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-300">
+                  {splitLines(lab.packet.preLabQuestions).map((line) => (
+                    <li key={line}>{line.replace(/^-\\s*/, "")}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </Card>
+        ) : null}
       </section>
 
       <section className="mt-5">

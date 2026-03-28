@@ -59,6 +59,7 @@ model User {
   helpRequests         HelpRequest[]
   teacherAlerts        TeacherAlert[]       @relation("TeacherAlertRecipient")
   activityLogs         ActivityLog[]
+  labWork              StudentLabWork[]
 }
 
 model Class {
@@ -112,6 +113,8 @@ model Lab {
   helpRequests        HelpRequest[]
   alerts              TeacherAlert[]
   activity            ActivityLog[]
+  packet              LabPacket?
+  studentWork         StudentLabWork[]
 }
 
 model LabStep {
@@ -246,4 +249,55 @@ model ActivityLog {
   class     Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
   lab       Lab?         @relation(fields: [labId], references: [id], onDelete: SetNull)
   step      LabStep?     @relation(fields: [labStepId], references: [id], onDelete: SetNull)
+}
+
+model LabPacket {
+  id                  String   @id @default(cuid())
+  labId               String   @unique
+  sourceNarration     String
+  standardsAlignment  String
+  objective           String
+  equipmentNeeded     String
+  backgroundInformation String
+  practicalSignificance String
+  preLabPreparation   String
+  preLabQuestions     String
+  equipmentDatasheets String
+  labDataSheetTemplate String
+  procedures          String
+  inProcedureQuestions String
+  helpfulTips         String
+  labReportGuidelines String
+  rubric              String
+  dueDate             DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  lab                 Lab      @relation(fields: [labId], references: [id], onDelete: Cascade)
+}
+
+model StudentLabWork {
+  id                   String   @id @default(cuid())
+  studentId            String
+  labId                String
+  preLabResponses      String?
+  procedureThinkingLog String?
+  equipmentDataEntries String?
+  schematicComponents  String?
+  schematicConnections String?
+  schematicDiagram     String?
+  reportIntroduction   String?
+  reportMethodology    String?
+  reportDatasheetSummary String?
+  reportResults        String?
+  reportDiscussion     String?
+  reportApplications   String?
+  reportConclusion     String?
+  reportQuestions      String?
+  reportReferences     String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  student              User     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lab                  Lab      @relation(fields: [labId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, labId])
 }

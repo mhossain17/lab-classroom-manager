@@ -483,6 +483,43 @@ async function main() {
     ]
   });
 
+  await prisma.labPacket.create({
+    data: {
+      labId: logicLab.id,
+      sourceNarration:
+        "Build a standards-aligned NAND/NOR lab with in-procedure reflection prompts and a structured report rubric.",
+      standardsAlignment:
+        "- HS-ETS1-2\\n- CDOS Standard 2\\n- ETA-I Digital Electronics: truth-table verification\\n- NOCTI Pre-Engineering: technical documentation",
+      objective:
+        "Students will test NAND and NOR gate behavior, compare measured truth tables to expected outputs, and justify troubleshooting choices.",
+      equipmentNeeded:
+        "- Breadboard\\n- 74HC00 NAND IC\\n- 74HC02 NOR IC\\n- LEDs + resistors\\n- Switches\\n- Power supply\\n- Datasheets",
+      backgroundInformation:
+        "NAND and NOR are universal gates in digital electronics. Their behavior under all input combinations supports reliable logic design.",
+      practicalSignificance:
+        "Understanding universal gates supports design and diagnostics for controllers, safety logic, embedded systems, and digital interfaces.",
+      preLabPreparation:
+        "Review pinouts, truth tables, and safe breadboard setup. Confirm power and ground mapping before wiring logic paths.",
+      preLabQuestions:
+        "1. Why are NAND and NOR called universal gates?\\n2. Which input states produce LOW output for NAND and NOR?\\n3. What checks verify power and orientation?",
+      equipmentDatasheets:
+        "List all IC datasheets and identify VCC/GND pins, truth-table rows, and max ratings.",
+      labDataSheetTemplate:
+        "Student name/date, expected vs actual truth table rows, schematic, troubleshooting log, and final validation statement.",
+      procedures:
+        "Experiment 1: Build and test NAND.\\nExperiment 2: Build and test NOR.\\nExperiment 3: Compare mismatch causes and corrections.",
+      inProcedureQuestions:
+        "After each input pair, record what you expected, what you observed, and one evidence-based next action.",
+      helpfulTips:
+        "Check floating inputs, verify chip notch orientation, and change one variable at a time when troubleshooting.",
+      labReportGuidelines:
+        "Introduction, Methodology, Lab Datasheet, Results, Discussion, Applications, Conclusion, Questions, References.",
+      rubric:
+        "Setup accuracy (20), data quality (20), troubleshooting process (20), analysis/discussion (20), report quality and references (20).",
+      dueDate: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7)
+    }
+  });
+
   await prisma.studentLabProgress.createMany({
     data: [
       {
@@ -552,6 +589,29 @@ async function main() {
         notes: "NOR output stuck high"
       }
     ]
+  });
+
+  await prisma.studentLabWork.create({
+    data: {
+      studentId: students[5].id,
+      labId: logicLab.id,
+      preLabResponses: "NAND is low only when both inputs are high. NOR is high only when both are low.",
+      procedureThinkingLog: "NAND row 11 matched expected. NOR row 01 failed initially due to floating input.",
+      equipmentDataEntries: "Measured VCC=4.98V. NAND truth table matched all rows after rewiring.",
+      schematicComponents: "vcc,VCC\ngnd,GND\nnand1,NAND\nnor1,NOR",
+      schematicConnections: "vcc,nand1,Power\nvcc,nor1,Power\nnand1,gnd,Ground\nnor1,gnd,Ground",
+      schematicDiagram:
+        "graph LR\n  vcc[\"VCC\"]\n  gnd[\"GND\"]\n  nand1[\"NAND\"]\n  nor1[\"NOR\"]\n  vcc --> nand1\n  vcc --> nor1\n  nand1 --> gnd\n  nor1 --> gnd",
+      reportIntroduction: "NAND and NOR gates are foundational digital logic elements used in universal design.",
+      reportMethodology: "Breadboard circuits were wired and tested across all four input combinations for both gates.",
+      reportDatasheetSummary: "Truth table and schematic were recorded in the lab datasheet.",
+      reportResults: "NAND and NOR outputs matched expected truth tables after correcting one floating input.",
+      reportDiscussion: "The biggest issue was input stability, not wiring topology.",
+      reportApplications: "Used in alarms, control logic, and embedded interfaces.",
+      reportConclusion: "Universal gate behavior was confirmed experimentally.",
+      reportQuestions: "All end-of-lab questions answered.",
+      reportReferences: "74HC00 and 74HC02 datasheets."
+    }
   });
 
   const helpRequestA = await prisma.helpRequest.create({

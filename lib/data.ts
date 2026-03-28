@@ -93,6 +93,7 @@ export async function getStudentLabContext(studentId: string, labId: string) {
     },
     include: {
       class: true,
+      packet: true,
       steps: {
         orderBy: { order: "asc" }
       },
@@ -119,6 +120,10 @@ export async function getStudentLabContext(studentId: string, labId: string) {
         },
         orderBy: { createdAt: "desc" },
         take: 8
+      },
+      studentWork: {
+        where: { studentId },
+        take: 1
       }
     }
   });
@@ -173,6 +178,7 @@ export async function getTeacherLabs(teacherId: string, includeAll = false) {
     },
     include: {
       class: true,
+      packet: true,
       steps: {
         orderBy: {
           order: "asc"
@@ -406,6 +412,56 @@ export async function getTeacherSettingsData(teacherId: string) {
     theme,
     settings
   };
+}
+
+export async function getTeacherLabPacketContext(
+  teacherId: string,
+  labId: string,
+  includeAll = false
+) {
+  const lab = await prisma.lab.findFirst({
+    where: includeAll
+      ? { id: labId }
+      : {
+          id: labId,
+          class: {
+            teacherId
+          }
+        },
+    include: {
+      class: true,
+      steps: {
+        orderBy: { order: "asc" }
+      },
+      packet: true
+    }
+  });
+
+  return lab;
+}
+
+export async function getStudentLabReportWorkspace(studentId: string, labId: string) {
+  return prisma.lab.findFirst({
+    where: {
+      id: labId,
+      class: {
+        enrollments: {
+          some: { studentId }
+        }
+      }
+    },
+    include: {
+      class: true,
+      steps: {
+        orderBy: { order: "asc" }
+      },
+      packet: true,
+      studentWork: {
+        where: { studentId },
+        take: 1
+      }
+    }
+  });
 }
 
 export async function getAdminUserManagementData() {

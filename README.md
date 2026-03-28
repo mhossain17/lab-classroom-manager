@@ -84,7 +84,9 @@ If no API key is present, the app uses rule-based fallback troubleshooting.
 - Lab `Start Here` instruction hub
 - Step-by-step lab workflow with expected results and common problems
 - AI troubleshooting page with guided follow-up logic
+- AI lab packet builder for teachers (standards alignment, due date, packet sections, report guidance, rubric)
 - Personalized progress tracking (`not started`, `in progress`, `stuck`, `waiting`, `completed`)
+- Student lab report workspace with in-procedure thinking log, schematic text capture, and downloadable markdown export
 - Teacher dashboard with:
   - students by status
   - current step distribution

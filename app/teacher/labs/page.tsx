@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Sparkles } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { toggleLabActiveAction } from "@/lib/actions/index";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +58,15 @@ export default async function TeacherLabsPage() {
                   <Badge variant={lab.isActive ? "success" : "neutral"}>{lab.isActive ? "Active" : "Inactive"}</Badge>
                   <Badge variant="accent">{lab.steps.length} steps</Badge>
                   <Badge variant="neutral">{lab.progressRecords.length} student records</Badge>
+                  <Badge variant={lab.packet ? "success" : "warning"}>
+                    {lab.packet ? "Packet Ready" : "Packet Missing"}
+                  </Badge>
+                  <Link href={`/teacher/labs/${lab.id}/builder`}>
+                    <Button type="button" size="sm" variant="secondary">
+                      <Sparkles className="mr-1 h-4 w-4" />
+                      AI Packet
+                    </Button>
+                  </Link>
                   <form action={toggleLabActiveAction}>
                     <input type="hidden" name="labId" value={lab.id} />
                     <Button type="submit" size="sm" variant="ghost">

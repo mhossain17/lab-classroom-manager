@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CircleAlert, Compass, LifeBuoy } from "lucide-react";
+import { CircleAlert, Compass, FileText, LifeBuoy } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { ProgressUpdateForm } from "@/components/student/progress-update-form";
 import { StepList } from "@/components/student/step-list";
@@ -118,6 +118,13 @@ export default async function StudentLabPage({ params }: { params: Promise<{ lab
               >
                 <Compass className="h-4 w-4" />
                 Re-open Start Here Recap
+              </Link>
+              <Link
+                href={`/student/labs/${lab.id}/report`}
+                className="flex items-center gap-2 rounded-xl bg-brand-secondary px-3 py-2 text-sm font-semibold text-white"
+              >
+                <FileText className="h-4 w-4" />
+                Lab Report Workspace
               </Link>
             </div>
           </Card>
