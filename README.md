@@ -16,7 +16,7 @@ A local-first classroom web app for lab-based high school engineering courses.
 - React + TypeScript
 - Tailwind CSS
 - Prisma ORM
-- SQLite (local development)
+- SQLite (local development) + Turso (hosted libSQL)
 
 ## Quick start
 
@@ -70,12 +70,43 @@ Login is intentionally simple in MVP: choose identity from the login dropdown.
 
 See `.env.example`.
 
-- `DATABASE_URL`: SQLite DB path
+- `DATABASE_URL`: local SQLite DB path used by Prisma CLI/migrations
+- `TURSO_DATABASE_URL`: Turso database URL (for deployed/runtime usage)
+- `TURSO_AUTH_TOKEN`: Turso auth token
 - `OPENAI_API_KEY`: optional, enables AI responses
 - `OPENAI_MODEL`: optional model override (default `gpt-4.1-mini`)
 - `APP_URL`: local app URL
 
 If no API key is present, the app uses rule-based fallback troubleshooting.
+
+## Vercel + Turso deployment
+
+1. In Turso, create your database and auth token.
+2. Initialize schema on Turso (choose one):
+   - Import your existing local DB:
+
+   ```bash
+   turso db import ./dev.db --name <your-db-name>
+   ```
+
+   - Or apply your Prisma migration SQL files with Turso CLI:
+
+   ```bash
+   turso db shell <your-db-name> < prisma/migrations/<timestamp>_<name>/migration.sql
+   ```
+
+3. In Vercel project settings, add:
+   - `TURSO_DATABASE_URL`
+   - `TURSO_AUTH_TOKEN`
+4. Redeploy.
+
+Runtime Prisma client logic automatically uses Turso when `TURSO_DATABASE_URL` is set, and falls back to local SQLite when it is not.
+
+For seeding Turso directly:
+
+```bash
+TURSO_DATABASE_URL="libsql://<your-db-url>" TURSO_AUTH_TOKEN="<your-token>" npm run db:seed
+```
 
 ## Key features implemented
 

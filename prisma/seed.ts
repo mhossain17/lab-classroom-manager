@@ -3,11 +3,11 @@ import {
   AlertSeverity,
   AlertType,
   ProgressStatus,
-  UserRole,
-  PrismaClient
+  UserRole
 } from "@prisma/client";
+import { createPrismaClient } from "../lib/prisma";
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 type StepSeed = {
   order: number;

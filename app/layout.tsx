@@ -4,6 +4,8 @@ import { getOrCreateGlobalConfig } from "@/lib/data";
 import { getThemeCssVars } from "@/lib/theme";
 import "./globals.css";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "AI Classroom Manager - Labs",
   description: "AI-assisted lab support and classroom guidance for engineering classrooms"
